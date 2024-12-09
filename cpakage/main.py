@@ -86,9 +86,9 @@ Usage:
       Uninstall the specified package.
 
 Examples:
-  cpakage install curl_downloader
-  cpakage install curl_downloader --version 7.6.5
-  cpakage update curl_downloader
+  cpakage install <package_name>
+  cpakage install <package_name> --version 7.6.5
+  cpakage update  <package_name>
 """
     print(help_message)
 
