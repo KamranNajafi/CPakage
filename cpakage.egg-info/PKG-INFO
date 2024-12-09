@@ -11,3 +11,6 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
 Requires-Dist: requests
+
+# CPakage
+A package management tool for C++ libraries

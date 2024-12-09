@@ -72,23 +72,55 @@ def update_package(package_name, version):
 def show_help_message():
 
     help_message = """
-C++ Package Manager (cpakage)
-
+C/C++ Package Manager (CPakage)
+C/C++ Package Manager New version V=0.0.1.1
 Usage:
   cpakage install <package_name> [--version <version>]
       Install a package with the specified name and version.
       If no version is specified, the latest version is installed.
 
-  cpakage update <package_name>
+  cpakage update <package_name> [-Options]
       Update the specified package to the latest version.
 
   cpakage uninstall <package_name>
       Uninstall the specified package.
 
+Options (and corresponding environment variables):
+
+-all    : Update All Local Repository Packages
+            Examples: cpakage update -All
+            
+-F      : Install All The Packages Inside The File
+            Examples: cpakage install <"File Path">
+
+-S      : CPakage Program Settings
+            Some Settings: 
+                    0- Show Section Help
+                    1- Repository Path For Packages
+                    2- Repository Versioning
+            Examples 0: CPakage -S
+            Examples 1: CPakage -S -R -P <"Folder Path">
+            Examples 2: CPakage -S -R -V <"TRUE OR FALSE">
+
+-c cmd : program passed in as string (terminates option list)
+-d     : turn on parser debugging output (for experts only, only works on
+         debug builds); also PYTHONDEBUG=x
+-E     : ignore PYTHON* environment variables (such as PYTHONPATH)
+-h     : print this help message and exit (also -? or --help)
+-i     : inspect interactively after running script; forces a prompt even
+         if stdin does not appear to be a terminal; also PYTHONINSPECT=x
+-I     : isolate Python from the user's environment (implies -E and -s)
+-m mod : run library module as a script (terminates option list)
+-O     : remove assert and __debug__-dependent statements; add .opt-1 before
+         .pyc extension; also PYTHONOPTIMIZE=x
+-OO    : do -O changes and also discard docstrings; add .opt-2 before
+         .pyc extension
+
 Examples:
   cpakage install <package_name>
   cpakage install <package_name> --version 7.6.5
   cpakage update  <package_name>
+  
 """
     print(help_message)
 

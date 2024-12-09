@@ -4,7 +4,7 @@ try:
     with open("README.md", "r", encoding="utf-8") as fh:
         long_description = fh.read()
 except FileNotFoundError:
-    long_description = "A package management tool for C++ libraries."
+    long_description = "A Package Management Tool For C++ Libraries."
 
 setup(
     name="cpakage",
