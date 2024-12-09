@@ -1,0 +1,10 @@
+# C++ Package Manager (cpakage)
+
+`cpakage` is a package manager for managing C++ library packages.
+
+## Installation
+
+You can install `cpakage` using pip:
+
+```bash
+pip install cpakage

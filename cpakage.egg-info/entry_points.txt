@@ -1,0 +1,2 @@
+[console_scripts]
+cpakage = cpakage.main:main

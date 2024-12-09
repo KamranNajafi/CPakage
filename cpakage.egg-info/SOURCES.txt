@@ -1,0 +1,10 @@
+README.md
+setup.py
+cpakage/__init__.py
+cpakage/main.py
+cpakage.egg-info/PKG-INFO
+cpakage.egg-info/SOURCES.txt
+cpakage.egg-info/dependency_links.txt
+cpakage.egg-info/entry_points.txt
+cpakage.egg-info/requires.txt
+cpakage.egg-info/top_level.txt
