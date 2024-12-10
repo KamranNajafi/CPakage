@@ -4,7 +4,15 @@ import urllib3
 import json
 import argparse
 import sys
+import configparser
 from cpakage import main
+
+
+config = configparser.ConfigParser()
+config.read('config.ini')
+repository_path = config.get('settings', 'repository_path')
+repository_versioning = config.get('settings', 'repository_versioning')
+
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -19,38 +27,72 @@ def get_package_info(package_name):
 
 
 def update_local_repo(package_name, version, project_page):
+    """Update the local repository file with new package information."""
     repo_dir = 'local_repo'
     if not os.path.exists(repo_dir):
         os.makedirs(repo_dir)
 
     repo_file = os.path.join(repo_dir, 'installed_packages.json')
 
-    # Example code for updating the local repo
+    # Load existing packages
     if os.path.exists(repo_file):
         with open(repo_file, "r") as f:
             installed_packages = json.load(f)
     else:
         installed_packages = []
 
-    # Adding new package to the installed list
+    # Check if the package with the same version already exists
+    for pkg in installed_packages:
+        if pkg["name"] == package_name and pkg["version"] == version:
+            print(f"Package '{package_name}' version '{version}' is already registered in the local repository.")
+            return  # Do nothing if it's already registered
+
+    # Add the new package information
     installed_packages.append({"name": package_name, "version": version, "project_page": project_page})
 
+    # Write updated list back to the file
     with open(repo_file, "w") as f:
         json.dump(installed_packages, f, indent=4)
+    print(f"Updated local repository with package '{package_name}' version '{version}'.")
+
+
+def is_package_installed(package_name, version):
+    """Check if the package with a specific version is already installed."""
+    repo_file = os.path.join('local_repo', 'installed_packages.json')
+
+    if not os.path.exists(repo_file):
+        return False  # If the repo file doesn't exist, package isn't installed.
+
+    with open(repo_file, "r") as f:
+        installed_packages = json.load(f)
+
+    for pkg in installed_packages:
+        if pkg["name"] == package_name and pkg["version"] == version:
+            # Check if the physical file exists
+            package_dir = os.path.join(DEFAULT_INSTALL_PATH, package_name)
+            package_file = os.path.join(package_dir, f"{package_name}-v{version}.tar.gz")
+            return os.path.exists(package_file)  # Return True only if the file exists.
+
+    return False  # Package not found in the repo.
 
 
 def install_package(package_name, version):
+    """Install a package if not already installed or its file is missing."""
+    if is_package_installed(package_name, version):
+        print(f"Package '{package_name}' version '{version}' is already installed.")
+        return
+
     package_info = get_package_info(package_name)
     download_url = package_info['url'].replace("{version}", version)
     project_page = package_info.get("project_page", "N/A")
 
     print(f"Downloading {package_name} version {version} from {download_url}...")
 
-    # Downloading package logic (e.g., using requests)
+    # Download the package
     response = requests.get(download_url, verify=False)
 
     if response.status_code == 200:
-        # Define the file path based on default install path
+        # Save the package to the local repository
         package_dir = os.path.join(DEFAULT_INSTALL_PATH, package_name)
         if not os.path.exists(package_dir):
             os.makedirs(package_dir)
@@ -68,6 +110,54 @@ def install_package(package_name, version):
 def update_package(package_name, version):
     install_package(package_name, version)
 
+def uninstall_package(package_name, version=None):
+    """
+    Uninstall a specific package by name and optionally by version.
+
+    Args:
+        package_name (str): Name of the package to uninstall.
+        version (str, optional): Specific version to uninstall. If not provided, all versions of the package are removed.
+    """
+    repo_file = os.path.join('local_repo', 'installed_packages.json')
+
+    if not os.path.exists(repo_file):
+        print("No packages installed yet.")
+        return
+
+    with open(repo_file, "r") as f:
+        installed_packages = json.load(f)
+
+    # Find and remove the specified package
+    updated_packages = []
+    package_found = False
+
+    for package in installed_packages:
+        if package["name"].lower() == package_name.lower():
+            if version is None or package["version"] == version:
+                package_found = True
+                print(f"Uninstalling {package['name']} version {package['version']}...")
+                # Remove the package files from the local directory
+                package_dir = os.path.join(DEFAULT_INSTALL_PATH, package["name"])
+                if os.path.exists(package_dir):
+                    try:
+                        import shutil
+                        shutil.rmtree(package_dir)
+                        print(f"Removed files from {package_dir}")
+                    except Exception as e:
+                        print(f"Failed to remove files from {package_dir}: {e}")
+                else:
+                    print(f"No files found for {package['name']} version {package['version']}.")
+            else:
+                updated_packages.append(package)
+        else:
+            updated_packages.append(package)
+
+    if package_found:
+        with open(repo_file, "w") as f:
+            json.dump(updated_packages, f, indent=4)
+        print(f"{package_name} uninstalled successfully.")
+    else:
+        print(f"No matching package found for {package_name} version {version if version else 'any'}.")
 
 def show_help_message():
 
@@ -85,19 +175,20 @@ Usage:
   cpakage uninstall <package_name>
       Uninstall the specified package.
 
+****Uppercase or lowercase letters do not matter****
 Options (and corresponding environment variables):
 
 -all    : Update All Local Repository Packages
             Examples: cpakage update -All
             
--F      : Install All The Packages Inside The File
-            Examples: cpakage install <"File Path">
+-f      : Install All The Packages Inside The File
+            Examples: cpakage install -F <"File Path">
 
--S      : CPakage Program Settings
+-s      : CPakage Program Settings
             Some Settings: 
                     0- Show Section Help
-                    1- Repository Path For Packages
-                    2- Repository Versioning
+                    1- Repository Path For Packages <"Default:FALSE">
+                    2- Repository Versioning <"Default:FALSE">
             Examples 0: CPakage -S
             Examples 1: CPakage -S -R -P <"Folder Path">
             Examples 2: CPakage -S -R -V <"TRUE OR FALSE">
@@ -136,7 +227,11 @@ def main():
     elif args.command == "update":
         update_package(args.package_name, args.version)
     elif args.command == "uninstall":
-        print(f"Uninstalling {args.package_name} is not yet implemented.")
+        if not args.package_name:
+            print("Please specify a package name to uninstall.")
+        else:
+            uninstall_package(args.package_name, args.version)
+
     else:
         print("Invalid command. Use 'cpakage' for help.")
         sys.exit(1)

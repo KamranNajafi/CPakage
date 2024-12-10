@@ -1,35 +1,6 @@
 [
     {
         "name": "curl_downloader",
-        "version": "7.6.5"
-    },
-    {
-        "name": "curl_downloader",
-        "version": "7.6.5",
-        "project_page": "/usr/local/lib/curl_downloader"
-    },
-    {
-        "name": "curl_downloader",
-        "version": "7.6.5",
-        "project_page": "/usr/local/lib/curl_downloader"
-    },
-    {
-        "name": "curl_downloader",
-        "version": "7.6.5",
-        "project_page": "/usr/local/lib/curl_downloader"
-    },
-    {
-        "name": "curl_downloader",
-        "version": "7.6.5",
-        "project_page": "/usr/local/lib/curl_downloader"
-    },
-    {
-        "name": "curl_downloader",
-        "version": "7.6.5",
-        "project_page": "/usr/local/lib/curl_downloader"
-    },
-    {
-        "name": "curl_downloader",
         "version": "7.6.5",
         "project_page": "/usr/local/lib/curl_downloader"
     }
