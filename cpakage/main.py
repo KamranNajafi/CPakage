@@ -8,17 +8,28 @@ import configparser
 from cpakage import main
 
 
-config = configparser.ConfigParser()
-config.read('config.ini')
-repository_path = config.get('settings', 'repository_path')
-repository_versioning = config.get('settings', 'repository_versioning')
-
-
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 API_URL = "https://cpakage.testlink.ir/api/pakage_request_respons.php?name="
 DEFAULT_INSTALL_PATH = "local_repo/installed_packages"
+
+# Load configuration
+CONFIG_FILE = 'config.ini'
+
+# Load configuration dynamically
+def load_config():
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    return config
+
+def get_repository_path():
+    config = load_config()
+    return config.get('settings', 'repository_path', fallback="local_repo")
+
+def is_versioning_enabled():
+    config = load_config()
+    return config.getboolean('settings', 'repository_versioning', fallback=False)
 
 
 def get_package_info(package_name):
@@ -28,7 +39,7 @@ def get_package_info(package_name):
 
 def update_local_repo(package_name, version, project_page):
     """Update the local repository file with new package information."""
-    repo_dir = 'local_repo'
+    repo_dir = get_repository_path()
     if not os.path.exists(repo_dir):
         os.makedirs(repo_dir)
 
@@ -58,7 +69,7 @@ def update_local_repo(package_name, version, project_page):
 
 def is_package_installed(package_name, version):
     """Check if the package with a specific version is already installed."""
-    repo_file = os.path.join('local_repo', 'installed_packages.json')
+    repo_file = os.path.join(get_repository_path(), 'installed_packages.json')
 
     if not os.path.exists(repo_file):
         return False  # If the repo file doesn't exist, package isn't installed.
@@ -118,7 +129,7 @@ def uninstall_package(package_name, version=None):
         package_name (str): Name of the package to uninstall.
         version (str, optional): Specific version to uninstall. If not provided, all versions of the package are removed.
     """
-    repo_file = os.path.join('local_repo', 'installed_packages.json')
+    repo_file = os.path.join(get_repository_path(), 'installed_packages.json')
 
     if not os.path.exists(repo_file):
         print("No packages installed yet.")
@@ -158,6 +169,60 @@ def uninstall_package(package_name, version=None):
         print(f"{package_name} uninstalled successfully.")
     else:
         print(f"No matching package found for {package_name} version {version if version else 'any'}.")
+
+
+def edit_config(option, value):
+    """
+    Edit the configuration file based on user input.
+
+    Args:
+        option (str): The configuration option to edit.
+        value (str): The new value to set for the option.
+    """
+    config_file = 'config.ini'
+    config = configparser.ConfigParser()
+
+    # Load the existing config file
+    if os.path.exists(config_file):
+        config.read(config_file)
+    else:
+        print(f"Configuration file '{config_file}' not found.")
+        return
+
+    # Update the setting
+    if option.lower() == "path":
+        config.set('settings', 'repository_path', value)
+    elif option.lower() == "versioning":
+        if value.lower() in ["true", "false"]:
+            config.set('settings', 'repository_versioning', value.capitalize())
+        else:
+            print("Invalid value for versioning. Use 'TRUE' or 'FALSE'.")
+            return
+    else:
+        print(f"Invalid option: {option}")
+        return
+
+    # Save the updated config file
+    with open(config_file, 'w') as configfile:
+        config.write(configfile)
+
+    print(f"Configuration updated: {option} = {value}")
+
+
+def handle_settings_command(args):
+    """
+    Handle the '-S' settings command.
+
+    Args:
+        args (Namespace): Parsed command-line arguments.
+    """
+    if args.path:
+        edit_config('path', args.path)
+    elif args.versioning:
+        edit_config('versioning', args.versioning)
+    else:
+        print("Invalid settings command. Use '-S -R -P <path>' or '-S -R -V <TRUE/FALSE>'.")
+
 
 def show_help_message():
 
@@ -207,14 +272,24 @@ Examples:
 def main():
     print("cpakage is running!")
 
+    # command arguments
     parser = argparse.ArgumentParser(description="C++ Package Manager (cpakage)", add_help=False)
     parser.add_argument("command", nargs="?", help="Command to execute (install, update, uninstall)")
     parser.add_argument("package_name", nargs="?", help="Name of the package")
     parser.add_argument("--version", help="Version of the package (optional)")
 
+    # Settings command arguments
+    parser.add_argument("-S", action="store_true", help="Settings command")
+    parser.add_argument("-R", action="store_true", help="Repository option for settings")
+    parser.add_argument("-P", dest="path", help="Path for repository")
+    parser.add_argument("-V", dest="versioning", help="Enable or disable repository versioning (TRUE/FALSE)")
+
     # Parse arguments
     args = parser.parse_args()
 
+    if args.S:
+        handle_settings_command(args)
+        sys.exit(0)
 
     if not args.command:
         show_help_message()
