@@ -13,18 +13,18 @@ CPakage/                          ← این ریپو (Client CLI)
 ├── cpakage/
 │   └── main.py                   ← فایل فعال اصلی (اینجا کار کن)
 ├── docs/
-│   ├── VISION.md                 ← نقشه راه کامل
-│   ├── ARCHITECTURE.md           ← معماری فنی
-│   └── PACKAGE_FORMAT.md         ← فرمت cpakage.toml
+│   ├── VISION.md
+│   ├── ARCHITECTURE.md
+│   └── PACKAGE_FORMAT.md
 ├── CLAUDE.md                     ← این فایل
-├── setup.py                      ← تنظیمات pip install
-├── requirements.txt
-└── config.ini                    ← (قدیمی، جایگزین شده با ~/.cpakage/config.ini)
+├── SESSION_HANDOFF.md            ← وضعیت سشن
+├── setup.py
+└── requirements.txt
 
 فایل‌های legacy (دست نزن):
-├── cpakage.py                    ← نسخه قدیمی
-├── cpakage-ok.py                 ← نسخه قدیمی
-└── cpakage-00.py                 ← نسخه اولیه
+├── cpakage.py
+├── cpakage-ok.py
+└── cpakage-00.py
 ```
 
 **ریپوی سرور جدا:** `kamrannajafi/CPakage-Registry`
@@ -36,85 +36,70 @@ CPakage/                          ← این ریپو (Client CLI)
 | Client CLI | Python 3.8+ |
 | Package manifest | TOML (`cpakage.toml`) |
 | Config | INI (`~/.cpakage/config.ini`) |
+| Token | `~/.cpakage/token` (JWT) |
 | Local repo DB | JSON (`~/.cpakage/installed_packages.json`) |
-| Server API | FastAPI (Python) |
-| Server DB | PostgreSQL |
-| Server Storage | Filesystem / S3-compatible |
-| Server Auth | JWT |
-| Packaging | pip / setuptools |
+| Server API | PHP 8.1 + Slim 4 |
+| Server DB | MySQL 8.0 |
+| Server Auth | JWT (firebase/php-jwt) |
 
 ## Branch فعال
 
 ```
-claude/review-github-project-DLjNg
+claude/cpakage-cli-implementation-ugeah
 ```
 
-همه تغییرات روی این branch باشند. برای push:
-```bash
-git push -u origin claude/review-github-project-DLjNg
-```
+همه تغییرات روی این branch باشند.
 
-## دستورات CLI فعلی (پیاده‌سازی شده)
+## دستورات CLI (پیاده‌سازی شده)
 
 ```bash
-cpakage install <pkg>
-cpakage install <pkg> --version 1.2.3
-cpakage update <pkg>
-cpakage uninstall <pkg>
-cpakage uninstall <pkg> --version 1.2.3
-cpakage -S -R -P <path>       # تغییر مسیر repo
-cpakage -S -R -V TRUE/FALSE   # versioning
+cpakage install <pkg> [--version <ver>]   # دانلود + extract tar.gz
+cpakage update  <pkg> [--version <ver>]   # نصب نسخه جدید
+cpakage uninstall <pkg> [--version <ver>] # حذف فایل + دایرکتوری extracted
+cpakage list                              # لیست پکیج‌های نصب‌شده
+cpakage info <pkg>                        # اطلاعات از registry
+cpakage search <query>                    # جستجو در registry
+cpakage login                             # ورود به registry → ذخیره JWT
+cpakage register                          # ثبت‌نام → ذخیره JWT
+cpakage publish                           # خواندن cpakage.toml + ساخت tar.gz + آپلود
+cpakage -S -R -P <path>                   # تغییر مسیر repo
+cpakage -S -R -V TRUE/FALSE               # versioning
 ```
 
-## دستورات CLI هدف (باید پیاده‌سازی شود)
-
-```bash
-cpakage init                   # ایجاد cpakage.toml
-cpakage publish                # آپلود پکیج به registry
-cpakage login                  # ورود به registry
-cpakage search <query>         # جستجو در registry
-cpakage list                   # لیست پکیج‌های نصب‌شده
-cpakage info <pkg>             # اطلاعات پکیج
-cpakage install -f cpakage.toml  # نصب از manifest
-```
-
-## مسیرهای ثابت (بعد از فیکس)
+## مسیرهای ثابت
 
 ```python
 BASE_DIR       = ~/.cpakage/
 CONFIG_FILE    = ~/.cpakage/config.ini
+TOKEN_FILE     = ~/.cpakage/token
 INSTALL_PATH   = ~/.cpakage/installed_packages/<pkg>/<pkg>-v<ver>.tar.gz
-REPO_JSON      = ~/.cpakage/installed_packages.json
+EXTRACT_PATH   = ~/.cpakage/installed_packages/<pkg>/<pkg>-v<ver>/
+REPO_JSON      = ~/.cpakage/installed_packages.json  (یا از config path)
 ```
 
-## API سرور (فعلی)
+## API سرور
 
 ```
+# سرور قدیمی (برای install)
 Base URL: https://cpakage.testlink.ir/api/
 Endpoint: pakage_request_respons.php?name=<pkg>
 Response: { "url": "...", "latest_version": "...", "project_page": "..." }
+
+# سرور جدید (CPakage-Registry)
+Base URL: https://cpakage.ir/api/v1
+POST /auth/login       → JWT token
+POST /auth/register    → JWT token
+GET  /packages/{name}  → اطلاعات پکیج
+POST /packages/upload  → آپلود (Bearer token)
+GET  /search?q=query   → جستجو
 ```
 
-## API سرور (هدف — CPakage-Registry)
-
-```
-GET  /api/v1/packages/{name}              → اطلاعات پکیج
-GET  /api/v1/packages/{name}/{version}    → اطلاعات نسخه خاص
-POST /api/v1/packages/upload              → آپلود پکیج (نیاز به auth)
-GET  /api/v1/search?q=query               → جستجو
-POST /api/v1/auth/register                → ثبت‌نام
-POST /api/v1/auth/login                   → ورود → JWT token
-GET  /api/v1/packages/{name}/versions     → لیست نسخه‌ها
-```
-
-## نکات مهم برای Claude
+## نکات مهم
 
 1. **فایل فعال فقط** `cpakage/main.py` است — بقیه legacy‌اند
 2. **SSL verify=False** است — سرور testlink.ir گواهی self-signed دارد
-3. **پکیج‌ها فعلاً فقط دانلود می‌شوند** — extract/compile هنوز پیاده‌سازی نشده
-4. **مهم‌ترین feature بعدی:** extract + CMake integration
-5. فرمت manifest: `cpakage.toml` (مانند pyproject.toml پایتون)
-6. هدف نهایی: developer با `cpakage install boost` کتابخانه آماده استفاده داشته باشد
+3. **tomllib** برای Python 3.11+ built-in است؛ برای قدیمی‌تر: `pip install tomli`
+4. **ریپوی سرور:** `kamrannajafi/CPakage-Registry` — branch همین: `claude/cpakage-cli-implementation-ugeah`
 
 ## اولویت‌بندی توسعه
 
@@ -122,17 +107,18 @@ GET  /api/v1/packages/{name}/versions     → لیست نسخه‌ها
 Phase 1 (MVP واقعی):
   ✅ CLI پایه (install/uninstall/update)
   ✅ فیکس باگ‌ها
-  ⬜ extract کردن tar.gz بعد از دانلود
-  ⬜ cpakage init (ایجاد manifest)
-  ⬜ cpakage publish (آپلود به سرور)
-  ⬜ cpakage login/register
-  ⬜ cpakage search و cpakage list و cpakage info
+  ✅ extract کردن tar.gz بعد از دانلود
+  ✅ cpakage login / register
+  ✅ cpakage publish
+  ✅ cpakage list / info / search
+  ✅ server skeleton (PHP + Slim 4 + MySQL) → CPakage-Registry
 
 Phase 2 (اکوسیستم):
+  ⬜ cpakage init (ایجاد cpakage.toml تعاملی)
   ⬜ CMake integration (FindCPakage.cmake)
   ⬜ dependency resolution
   ⬜ web registry UI
-  ⬜ فرمت استاندارد cpakage.toml
+  ⬜ deploy روی سرور (docker-compose)
 
 Phase 3 (بلوغ):
   ⬜ pre-built binaries برای platform‌های مختلف

@@ -7,49 +7,51 @@
 ## وضعیت پروژه (تاریخ: 2026-05-18)
 
 ### ریپو: `kamrannajafi/cpakage`
-### Branch فعال: `claude/review-github-project-DLjNg`
+### Branch فعال: `claude/cpakage-cli-implementation-ugeah`
 
 ---
 
 ## آنچه در این سشن انجام شد
 
-### ۱. فیکس باگ‌ها در `cpakage/main.py` (commit: d681e9a)
-همه باگ‌های زیر برطرف شدند:
-- ❌ `from cpakage import main` — circular self-import حذف شد (از main.py، cpakage.py، cpakage-ok.py)
-- ❌ `update` بدون `--version` → TypeError — فیکس: حالا `latest_version` از API می‌گیرد
-- ❌ بدون error handling برای شبکه/API — فیکس: ConnectionError، Timeout، HTTPError اضافه شد
-- ❌ `uninstall` کل دایرکتوری را پاک می‌کرد — فیکس: فقط فایل نسخه مشخص حذف می‌شود
-- ❌ `install/update/uninstall` بدون نام پکیج کرش — فیکس: validation اضافه شد
-- ❌ مسیرهای relative — فیکس: همه مسیرها به `~/.cpakage/` تغییر کرد
-- ❌ `edit_config` مسیر hardcode — فیکس: از `CONFIG_FILE` ثابت استفاده می‌کند
-- ❌ `venv-os.py` source activate — فیکس: تبدیل به subprocess شد
+### ۱. پیاده‌سازی دستورات جدید در `cpakage/main.py`
 
-### ۲. مستندات (commit: 28fb2c0)
-- `CLAUDE.md` — context کامل پروژه برای سشن‌های Claude
-- `docs/VISION.md` — نقشه راه کامل
-- `docs/ARCHITECTURE.md` — طراحی فنی + Database Schema + API endpoints
-- `docs/PACKAGE_FORMAT.md` — فرمت `cpakage.toml` با مثال‌های کامل
+#### Extract tar.gz بعد از دانلود
+- در `install_package()` بعد از ذخیره فایل، با `tarfile.extractall()` extract می‌شود
+- مسیر: `~/.cpakage/installed_packages/<pkg>/<pkg>-v<ver>/`
+- در `uninstall_package()` هم دایرکتوری extracted پاک می‌شود
 
-### ۳. Server Skeleton در `server/` — PHP + Slim 4 + MySQL
-```
-server/
-├── public/
-│   ├── index.php        ← entry point + تمام routes
-│   └── .htaccess        ← URL rewriting برای Apache
-├── src/
-│   ├── Database.php     ← PDO singleton
-│   ├── Controllers/
-│   │   ├── AuthController.php     ← register / login → JWT
-│   │   ├── PackageController.php  ← get / versions / download / upload
-│   │   └── SearchController.php   ← full-text search
-│   └── Middleware/
-│       └── AuthMiddleware.php     ← JWT verification
-├── storage/             ← فایل‌های tar.gz (خارج از public)
-├── composer.json        ← Slim 4 + firebase/php-jwt
-├── config.php           ← DB + JWT + storage settings
-├── schema.sql           ← MySQL schema
-└── README.md
-```
+#### `cpakage login`
+- ورودی: username + password (با getpass)
+- ارسال به: `POST https://cpakage.ir/api/v1/auth/login`
+- ذخیره JWT در: `~/.cpakage/token`
+
+#### `cpakage register`
+- ورودی: username + email + password + confirm
+- ارسال به: `POST https://cpakage.ir/api/v1/auth/register`
+- ذخیره JWT در: `~/.cpakage/token`
+
+#### `cpakage publish`
+- خواندن `cpakage.toml` از دایرکتوری جاری
+- خواندن JWT از `~/.cpakage/token`
+- ساخت tar.gz (با فیلتر .git)
+- آپلود به: `POST https://cpakage.ir/api/v1/packages/upload`
+- بعد از آپلود، فایل tar.gz محلی حذف می‌شود
+
+#### `cpakage list`
+- خواندن `installed_packages.json` و نمایش جدولی
+
+#### `cpakage info <pkg>`
+- `GET https://cpakage.ir/api/v1/packages/<pkg>`
+- نمایش: name, description, license, homepage, latest, versions
+
+#### `cpakage search <query>`
+- `GET https://cpakage.ir/api/v1/search?q=<query>`
+- نمایش جدولی: name, latest_version, total_downloads, description
+
+### ۲. انتقال کد سرور به `kamrannajafi/CPakage-Registry`
+- تمام فایل‌های `server/` از CPakage به CPakage-Registry منتقل شدند
+- فایل‌های اضافه: `.gitignore`, `docker-compose.yml`, `CLAUDE.md`
+- branch: `claude/cpakage-cli-implementation-ugeah`
 
 ---
 
@@ -57,51 +59,23 @@ server/
 
 | فایل | وضعیت | توضیح |
 |------|--------|-------|
-| `cpakage/main.py` | ✅ فعال | فایل اصلی — همه تغییرات اینجا |
-| `cpakage/main.py` | ✅ فیکس‌شده | همه باگ‌ها برطرف شدند |
+| `cpakage/main.py` | ✅ کامل | همه دستورات پیاده‌سازی شدند |
 | `cpakage.py` | ⚠️ Legacy | دست نزن |
 | `cpakage-ok.py` | ⚠️ Legacy | دست نزن |
 | `cpakage-00.py` | ⚠️ Legacy | دست نزن |
-| `server/` | 🆕 جدید | کد سرور — هنوز deploy نشده |
+| `server/` | 🔀 منتقل شد | به CPakage-Registry |
 
 ---
 
 ## قدم‌های بعدی (به ترتیب اولویت)
 
-### سشن بعدی — کار روی Client (`cpakage/main.py`)
-
 ```
-Phase 1 — MVP واقعی:
-  ✅ CLI پایه (install/uninstall/update)
-  ✅ فیکس باگ‌ها
-  ⬜ [HIGH] extract کردن tar.gz بعد از دانلود
-           → tarfile.extractall() بعد از download در install_package()
-           → کپی headers به include path
-  ⬜ [HIGH] cpakage login / cpakage register
-           → ارسال به POST /api/v1/auth/login
-           → ذخیره JWT token در ~/.cpakage/token
-  ⬜ [HIGH] cpakage publish
-           → خواندن cpakage.toml
-           → tar.gz ساختن از پروژه
-           → آپلود به POST /api/v1/packages/upload
-  ⬜ [MED] cpakage init
-           → ایجاد cpakage.toml تعاملی
-  ⬜ [MED] cpakage list
-           → خواندن installed_packages.json
-  ⬜ [MED] cpakage info <pkg>
-           → GET /api/v1/packages/<pkg>
-  ⬜ [MED] cpakage search <query>
-           → GET /api/v1/search?q=<query>
-```
-
-### سشن دیگر — کار روی Server (`server/`)
-نیاز به ریپوی جداگانه `CPakage-Registry`:
-```
-  ⬜ ریپوی CPakage-Registry روی GitHub بساز
-  ⬜ کد server/ را به آن ریپو منتقل کن
-  ⬜ deploy روی سرور (docker-compose up)
-  ⬜ تست API با Swagger UI
-  ⬜ web UI ساده برای registry
+Phase 2:
+  ⬜ [HIGH] cpakage init — ایجاد cpakage.toml تعاملی
+  ⬜ [HIGH] deploy سرور روی cpakage.ir (docker-compose up)
+  ⬜ [MED]  CMake integration (FindCPakage.cmake)
+  ⬜ [MED]  dependency resolution در install
+  ⬜ [LOW]  web registry UI
 ```
 
 ---
@@ -112,29 +86,9 @@ Phase 1 — MVP واقعی:
 # ثابت‌ها در cpakage/main.py
 BASE_DIR       = os.path.expanduser("~/.cpakage")
 CONFIG_FILE    = os.path.join(BASE_DIR, "config.ini")
+TOKEN_FILE     = os.path.join(BASE_DIR, "token")
 DEFAULT_INSTALL_PATH = os.path.join(BASE_DIR, "installed_packages")
 
-# API فعلی (سرور قدیمی)
-API_URL = "https://cpakage.testlink.ir/api/pakage_request_respons.php?name="
-
-# API هدف (سرور جدید)
+API_URL      = "https://cpakage.testlink.ir/api/pakage_request_respons.php?name="
 REGISTRY_URL = "https://cpakage.ir/api/v1"
-```
-
----
-
-## نکته مهم برای سشن بعدی
-
-وقتی روی `cpakage/main.py` کار می‌کنی:
-1. `install_package()` را پیدا کن (خط ~90)
-2. بعد از `open(package_file, "wb")` → extract اضافه کن
-3. برای `cpakage login/publish` توابع جدید به انتهای فایل اضافه کن
-4. در `main()` در بخش `if args.command` case جدید اضافه کن
-
----
-
-## دستور push سشن بعدی
-
-```bash
-git push -u origin claude/review-github-project-DLjNg
 ```

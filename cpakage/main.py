@@ -6,14 +6,26 @@ import argparse
 import sys
 import configparser
 import shutil
+import tarfile
+import getpass
+
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib  # pip install tomli
+    except ImportError:
+        tomllib = None
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 API_URL = "https://cpakage.testlink.ir/api/pakage_request_respons.php?name="
+REGISTRY_URL = "https://cpakage.ir/api/v1"
 
 BASE_DIR = os.path.expanduser("~/.cpakage")
 DEFAULT_INSTALL_PATH = os.path.join(BASE_DIR, "installed_packages")
 CONFIG_FILE = os.path.join(BASE_DIR, "config.ini")
+TOKEN_FILE = os.path.join(BASE_DIR, "token")
 
 
 def _ensure_base_dir():
@@ -138,6 +150,16 @@ def install_package(package_name, version):
             f.write(response.content)
 
         print(f"Successfully downloaded {package_name} version {version} to {package_file}.")
+
+        extract_dir = os.path.join(package_dir, f"{package_name}-v{version}")
+        os.makedirs(extract_dir, exist_ok=True)
+        try:
+            with tarfile.open(package_file, "r:gz") as tar:
+                tar.extractall(extract_dir)
+            print(f"Extracted to {extract_dir}")
+        except tarfile.TarError as e:
+            print(f"Warning: Could not extract package: {e}")
+
         update_local_repo(package_name, version, project_page)
     else:
         print(f"Failed to download {package_name} version {version}. HTTP {response.status_code}")
@@ -176,20 +198,23 @@ def uninstall_package(package_name, version=None):
                 package_dir = os.path.join(DEFAULT_INSTALL_PATH, package["name"])
 
                 if version is not None:
-                    # remove only the specific version file, keep other versions intact
                     package_file = os.path.join(package_dir, f"{package['name']}-v{pkg_version}.tar.gz")
+                    extract_dir = os.path.join(package_dir, f"{package['name']}-v{pkg_version}")
                     if os.path.exists(package_file):
                         try:
                             os.remove(package_file)
                             print(f"Removed {package_file}")
-                            if os.path.exists(package_dir) and not os.listdir(package_dir):
-                                os.rmdir(package_dir)
                         except Exception as e:
                             print(f"Failed to remove file: {e}")
-                    else:
-                        print(f"No file found for {package['name']} version {pkg_version}.")
+                    if os.path.exists(extract_dir):
+                        try:
+                            shutil.rmtree(extract_dir)
+                            print(f"Removed {extract_dir}")
+                        except Exception as e:
+                            print(f"Failed to remove directory: {e}")
+                    if os.path.exists(package_dir) and not os.listdir(package_dir):
+                        os.rmdir(package_dir)
                 else:
-                    # remove entire package directory when no version specified
                     if os.path.exists(package_dir):
                         try:
                             shutil.rmtree(package_dir)
@@ -209,6 +234,249 @@ def uninstall_package(package_name, version=None):
         print(f"{package_name} uninstalled successfully.")
     else:
         print(f"No matching package found for {package_name} version {version if version else 'any'}.")
+
+
+def login_command():
+    username = input("Username: ")
+    password = getpass.getpass("Password: ")
+
+    try:
+        response = requests.post(
+            f"{REGISTRY_URL}/auth/login",
+            json={"username": username, "password": password},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            token = data.get("access_token", "")
+            _ensure_base_dir()
+            with open(TOKEN_FILE, "w") as f:
+                f.write(token)
+            print(f"Login successful! Welcome, {username}.")
+        else:
+            data = response.json()
+            print(f"Login failed: {data.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to the CPakage registry.")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out.")
+        sys.exit(1)
+
+
+def register_command():
+    username = input("Username: ")
+    email = input("Email: ")
+    password = getpass.getpass("Password: ")
+    confirm = getpass.getpass("Confirm password: ")
+
+    if password != confirm:
+        print("Error: Passwords do not match.")
+        sys.exit(1)
+
+    try:
+        response = requests.post(
+            f"{REGISTRY_URL}/auth/register",
+            json={"username": username, "email": email, "password": password},
+            timeout=10,
+        )
+        if response.status_code == 201:
+            data = response.json()
+            token = data.get("access_token", "")
+            _ensure_base_dir()
+            with open(TOKEN_FILE, "w") as f:
+                f.write(token)
+            print(f"Registration successful! Logged in as {username}.")
+        else:
+            data = response.json()
+            print(f"Registration failed: {data.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to the CPakage registry.")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out.")
+        sys.exit(1)
+
+
+def publish_command():
+    manifest_file = "cpakage.toml"
+    if not os.path.exists(manifest_file):
+        print("Error: cpakage.toml not found in current directory.")
+        sys.exit(1)
+
+    if not os.path.exists(TOKEN_FILE):
+        print("Error: Not logged in. Run 'cpakage login' first.")
+        sys.exit(1)
+
+    with open(TOKEN_FILE) as f:
+        token = f.read().strip()
+
+    if not token:
+        print("Error: Invalid token. Run 'cpakage login' first.")
+        sys.exit(1)
+
+    if tomllib is None:
+        print("Error: TOML parser not available. Install 'tomli': pip install tomli")
+        sys.exit(1)
+
+    try:
+        with open(manifest_file, "rb") as f:
+            manifest = tomllib.load(f)
+    except Exception as e:
+        print(f"Error: Could not parse cpakage.toml: {e}")
+        sys.exit(1)
+
+    pkg_info = manifest.get("package", {})
+    name = pkg_info.get("name", "").strip()
+    version = pkg_info.get("version", "").strip()
+
+    if not name or not version:
+        print("Error: cpakage.toml must have [package] section with 'name' and 'version'.")
+        sys.exit(1)
+
+    archive_name = f"{name}-{version}.tar.gz"
+    print(f"Creating {archive_name}...")
+
+    include_paths = manifest.get("publish", {}).get("include", ["."])
+
+    def _tar_filter(info):
+        if ".git" in info.name.split(os.sep):
+            return None
+        if info.name.endswith(".tar.gz"):
+            return None
+        return info
+
+    try:
+        with tarfile.open(archive_name, "w:gz") as tar:
+            for path in include_paths:
+                if os.path.exists(path):
+                    tar.add(path, filter=_tar_filter)
+                else:
+                    print(f"Warning: Path '{path}' not found, skipping.")
+    except Exception as e:
+        print(f"Error: Could not create archive: {e}")
+        sys.exit(1)
+
+    print(f"Publishing {name} v{version} to registry...")
+
+    try:
+        with open(archive_name, "rb") as f:
+            response = requests.post(
+                f"{REGISTRY_URL}/packages/upload",
+                headers={"Authorization": f"Bearer {token}"},
+                files={"file": (archive_name, f, "application/gzip")},
+                data={"manifest": json.dumps(manifest)},
+                timeout=120,
+            )
+
+        if response.status_code == 201:
+            data = response.json()
+            print(f"Successfully published {name} v{version}!")
+            print(f"Checksum: {data.get('checksum', 'N/A')}")
+        else:
+            data = response.json()
+            print(f"Publish failed: {data.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to the CPakage registry.")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        print("Error: Upload timed out.")
+        sys.exit(1)
+    finally:
+        if os.path.exists(archive_name):
+            os.remove(archive_name)
+
+
+def list_command():
+    repo_file = os.path.join(get_repository_path(), "installed_packages.json")
+
+    if not os.path.exists(repo_file):
+        print("No packages installed.")
+        return
+
+    with open(repo_file) as f:
+        packages = json.load(f)
+
+    if not packages:
+        print("No packages installed.")
+        return
+
+    print(f"\n{'Name':<30} {'Version':<15} {'Project Page'}")
+    print("-" * 80)
+    for pkg in packages:
+        print(f"{pkg['name']:<30} {pkg['version']:<15} {pkg.get('project_page', 'N/A')}")
+    print(f"\nTotal: {len(packages)} package(s)")
+
+
+def info_command(package_name):
+    try:
+        response = requests.get(
+            f"{REGISTRY_URL}/packages/{package_name}",
+            timeout=10,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            keywords = data.get("keywords") or []
+            print(f"\nPackage:     {data.get('name', 'N/A')}")
+            print(f"Description: {data.get('description', 'N/A')}")
+            print(f"License:     {data.get('license', 'N/A')}")
+            print(f"Homepage:    {data.get('homepage', 'N/A')}")
+            print(f"Latest:      {data.get('latest_version', 'N/A')}")
+            if keywords:
+                print(f"Keywords:    {', '.join(keywords)}")
+            versions = data.get("versions", [])
+            if versions:
+                print(f"Versions:    {', '.join(v['version'] for v in versions[:10])}")
+        elif response.status_code == 404:
+            print(f"Package '{package_name}' not found in registry.")
+            sys.exit(1)
+        else:
+            data = response.json()
+            print(f"Error: {data.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to the CPakage registry.")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out.")
+        sys.exit(1)
+
+
+def search_command(query):
+    try:
+        response = requests.get(
+            f"{REGISTRY_URL}/search",
+            params={"q": query},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            results = data.get("results", [])
+            total = data.get("total", 0)
+
+            if not results:
+                print(f"No results found for '{query}'.")
+                return
+
+            print(f"\nFound {total} package(s) matching '{query}':\n")
+            print(f"{'Name':<25} {'Latest':<12} {'Downloads':<12} Description")
+            print("-" * 80)
+            for pkg in results:
+                desc = (pkg.get("description") or "")[:30]
+                print(f"{pkg['name']:<25} {str(pkg.get('latest_version', 'N/A')):<12} {str(pkg.get('total_downloads', 0)):<12} {desc}")
+        else:
+            data = response.json()
+            print(f"Error: {data.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to the CPakage registry.")
+        sys.exit(1)
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out.")
+        sys.exit(1)
 
 
 def edit_config(option, value):
@@ -250,32 +518,29 @@ def handle_settings_command(args):
 
 def show_help_message():
     help_message = """
-C/C++ Package Manager (CPakage) - Version 0.0.1.1
+C/C++ Package Manager (CPakage) — Version 0.0.2.0
 
 Usage:
-  cpakage install <package_name> [--version <version>]
-      Install a package. Installs the latest version if --version is omitted.
-
-  cpakage update <package_name> [--version <version>]
-      Update a package. Updates to the latest version if --version is omitted.
-
-  cpakage uninstall <package_name> [--version <version>]
-      Uninstall a package. Removes all versions if --version is omitted.
-
-  cpakage -S -R -P <path>
-      Set the local repository path.
-
-  cpakage -S -R -V <TRUE|FALSE>
-      Enable or disable repository versioning.
+  cpakage install <pkg> [--version <ver>]   Install a package
+  cpakage update  <pkg> [--version <ver>]   Update a package
+  cpakage uninstall <pkg> [--version <ver>] Uninstall a package
+  cpakage list                              List installed packages
+  cpakage info <pkg>                        Show package info from registry
+  cpakage search <query>                    Search packages in registry
+  cpakage login                             Log in to the registry
+  cpakage register                          Create a registry account
+  cpakage publish                           Publish package (needs cpakage.toml)
+  cpakage -S -R -P <path>                   Set local repository path
+  cpakage -S -R -V <TRUE|FALSE>             Enable/disable versioning
 
 Examples:
-  cpakage install curl_downloader
-  cpakage install curl_downloader --version 7.6.5
-  cpakage update  curl_downloader
-  cpakage uninstall curl_downloader
-  cpakage uninstall curl_downloader --version 7.6.5
-  cpakage -S -R -P /custom/path
-  cpakage -S -R -V TRUE
+  cpakage install nlohmann-json
+  cpakage install nlohmann-json --version 3.11.2
+  cpakage search json
+  cpakage info nlohmann-json
+  cpakage list
+  cpakage login
+  cpakage publish
 """
     print(help_message)
 
@@ -284,9 +549,9 @@ def main():
     print("cpakage is running!")
 
     parser = argparse.ArgumentParser(description="C/C++ Package Manager (cpakage)", add_help=False)
-    parser.add_argument("command", nargs="?", help="Command to execute (install, update, uninstall)")
-    parser.add_argument("package_name", nargs="?", help="Name of the package")
-    parser.add_argument("--version", help="Version of the package (optional)")
+    parser.add_argument("command", nargs="?", help="Command to execute")
+    parser.add_argument("package_name", nargs="?", help="Package name or search query")
+    parser.add_argument("--version", help="Package version")
 
     parser.add_argument("-S", action="store_true", help="Settings command")
     parser.add_argument("-R", action="store_true", help="Repository option for settings")
@@ -325,8 +590,32 @@ def main():
             sys.exit(1)
         uninstall_package(args.package_name, args.version)
 
+    elif args.command == "list":
+        list_command()
+
+    elif args.command == "info":
+        if not args.package_name:
+            print("Error: Please specify a package name. Usage: cpakage info <package_name>")
+            sys.exit(1)
+        info_command(args.package_name)
+
+    elif args.command == "search":
+        if not args.package_name:
+            print("Error: Please specify a search query. Usage: cpakage search <query>")
+            sys.exit(1)
+        search_command(args.package_name)
+
+    elif args.command == "login":
+        login_command()
+
+    elif args.command == "register":
+        register_command()
+
+    elif args.command == "publish":
+        publish_command()
+
     else:
-        print(f"Unknown command '{args.command}'. Use 'cpakage' for help.")
+        print(f"Unknown command '{args.command}'. Run 'cpakage' for help.")
         sys.exit(1)
 
 
