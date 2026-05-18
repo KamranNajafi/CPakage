@@ -1,23 +1,36 @@
 import os
 import subprocess
+import sys
 
 
 def setup_venv():
-    # ایجاد محیط مجازی
     if not os.path.exists("venv"):
         print("Creating virtual environment...")
-        os.system("python -m venv venv")
+        subprocess.run([sys.executable, "-m", "venv", "venv"], check=True)
+        print("Virtual environment created.")
+    else:
+        print("Virtual environment already exists.")
 
-    # فعال‌سازی محیط مجازی
-    activate_script = "venv\\Scripts\\activate" if os.name == "nt" else "source venv/bin/activate"
-    print(f"Activating virtual environment...")
-    os.system(activate_script)
+    pip_path = (
+        os.path.join("venv", "Scripts", "pip.exe")
+        if os.name == "nt"
+        else os.path.join("venv", "bin", "pip")
+    )
 
-    # نصب کتابخانه‌ها
     print("Installing required libraries...")
-    os.system("pip install requests")
+    subprocess.run([pip_path, "install", "requests"], check=True)
 
-    print("Setup complete! Virtual environment is ready.")
+    activate_path = (
+        os.path.join("venv", "Scripts", "activate")
+        if os.name == "nt"
+        else os.path.join("venv", "bin", "activate")
+    )
+
+    print("\nSetup complete! To activate the virtual environment, run:")
+    if os.name == "nt":
+        print(f"  {activate_path}")
+    else:
+        print(f"  source {activate_path}")
 
 
 if __name__ == "__main__":

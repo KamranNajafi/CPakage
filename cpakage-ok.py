@@ -4,7 +4,6 @@ import urllib3
 import json
 import argparse
 import sys
-from cpakage import main
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
