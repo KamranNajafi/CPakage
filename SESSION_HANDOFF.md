@@ -30,23 +30,24 @@
 - `docs/ARCHITECTURE.md` — طراحی فنی + Database Schema + API endpoints
 - `docs/PACKAGE_FORMAT.md` — فرمت `cpakage.toml` با مثال‌های کامل
 
-### ۳. Server Skeleton در `server/` (commit: 28fb2c0)
-FastAPI registry server کامل، مانند PyPI:
+### ۳. Server Skeleton در `server/` — PHP + Slim 4 + MySQL
 ```
 server/
-├── app/
-│   ├── main.py          ← FastAPI app + CORS
-│   ├── database.py      ← SQLAlchemy + PostgreSQL
-│   ├── models.py        ← User, Package, PackageVersion, Dependency
-│   ├── schemas.py       ← Pydantic schemas
-│   ├── auth.py          ← JWT + bcrypt
-│   ├── storage.py       ← مدیریت فایل tar.gz + SHA-256
-│   └── routes/
-│       ├── auth.py      ← register / login
-│       ├── packages.py  ← get / versions / download / upload
-│       └── search.py    ← full-text search
-├── docker-compose.yml   ← PostgreSQL + API
-├── Dockerfile
+├── public/
+│   ├── index.php        ← entry point + تمام routes
+│   └── .htaccess        ← URL rewriting برای Apache
+├── src/
+│   ├── Database.php     ← PDO singleton
+│   ├── Controllers/
+│   │   ├── AuthController.php     ← register / login → JWT
+│   │   ├── PackageController.php  ← get / versions / download / upload
+│   │   └── SearchController.php   ← full-text search
+│   └── Middleware/
+│       └── AuthMiddleware.php     ← JWT verification
+├── storage/             ← فایل‌های tar.gz (خارج از public)
+├── composer.json        ← Slim 4 + firebase/php-jwt
+├── config.php           ← DB + JWT + storage settings
+├── schema.sql           ← MySQL schema
 └── README.md
 ```
 
